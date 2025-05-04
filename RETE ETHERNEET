@@ -1,0 +1,150 @@
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
+#define MAX_PCS 10
+#define MAX_SW 3
+#define MAC_SIZE 6
+#define MSG_SIZE 256
+
+typedef struct pc {
+    int ID_PC;
+    int mac[MAC_SIZE];
+    int sw_collegato;
+    pid_t pid_ass;
+} Pc;
+
+typedef struct sw {
+    int num_sw;
+    int macTable[MAX_PCS][MAC_SIZE];
+} Sw;
+
+Pc new_pc(int num_pc) {
+    int inc_m_prec = 0;
+    Pc pc;
+    pc.ID_PC = num_pc;
+    for (int i = 0; i < MAC_SIZE - 1; i++) {
+        pc.mac[i] = 11 + inc_m_prec;
+        inc_m_prec = pc.mac[i];
+    }
+    pc.mac[MAC_SIZE - 1] = num_pc;
+    return pc;
+}
+
+Sw new_sw(int num_sw) {
+    Sw sw;
+    sw.num_sw = num_sw;
+    for (int i = 0; i < MAX_PCS; i++) {
+        for (int j = 0; j < MAC_SIZE; j++) {
+            sw.macTable[i][j] = 0;
+        }
+    }
+    return sw;
+}
+
+int main() {
+    char buffer[MSG_SIZE];
+    int pipe_pc_to_sw[2]; // PC → switch
+    int pipe_sw_to_pc[2]; // switch → PC
+
+    if (pipe(pipe_pc_to_sw) == -1 || pipe(pipe_sw_to_pc) == -1) {
+        perror("Errore creazione pipe");
+        exit(EXIT_FAILURE);
+    }
+
+    Pc pc_array[MAX_PCS];
+    Sw sw_array[MAX_SW];
+    int num_pc = 0;
+    int num_sw = 0;
+
+    // Creazione PC
+    for (int i = 0; i < MAX_PCS; i++) {
+        int scelta;
+        printf("Inserisci 0 per inserire un nuovo PC\nInserisci 1 per terminare: ");
+        scanf("%d", &scelta);
+        if (scelta == 0) {
+            pc_array[num_pc] = new_pc(num_pc);
+            num_pc++;
+        } else if (scelta == 1) {
+            break;
+        } else {
+            printf("Scelta non valida\n");
+            i--;
+        }
+    }
+
+    // Creazione SWITCH
+    for (int i = 0; i < MAX_SW; i++) {
+        int scelta;
+        printf("Inserisci 0 per inserire un nuovo SWITCH\nInserisci 1 per terminare: ");
+        scanf("%d", &scelta);
+        if (scelta == 0) {
+            sw_array[num_sw] = new_sw(num_sw);
+            num_sw++;
+        } else if (scelta == 1) {
+            break;
+        } else {
+            printf("Scelta non valida\n");
+            i--;
+        }
+    }
+
+    // Collegamento PC → SWITCH
+    for (int i = 0; i < num_pc; i++) {
+        int scelta;
+        printf("A quale switch vuoi collegare il pc %d?\n", i);
+        scanf("%d", &scelta);
+        if (scelta >= 0 && scelta < num_sw) {
+            pc_array[i].sw_collegato = scelta;
+            printf("Collegato PC %d allo switch %d\n", i, scelta);
+        } else {
+            printf("Switch non valido.\n");
+            i--;
+        }
+    }
+
+    printf("RETE PRONTA E CONFIGURATA\n");
+
+    // Comunicazione
+    while (1) {
+        int pc_mit, pc_dest;
+        printf("Inserisci il PC mittente (-1 per uscire): ");
+        scanf("%d", &pc_mit);
+        if (pc_mit == -1)
+            break;
+        if (pc_mit < 0 || pc_mit >= num_pc) {
+            printf("PC mittente non valido\n");
+            continue;
+        }
+
+        printf("Inserisci il PC destinatario: ");
+        scanf("%d", &pc_dest);
+        if (pc_dest < 0 || pc_dest >= num_pc) {
+            printf("PC destinatario non valido\n");
+            continue;
+        }
+
+        getchar(); // puliamo new line
+        printf("Inserisci il messaggio: ");
+        fgets(buffer, MSG_SIZE, stdin);
+
+        int sw_mit = pc_array[pc_mit].sw_collegato;
+        int sw_dest = pc_array[pc_dest].sw_collegato;
+
+        // Simulazione passaggio messaggio
+        printf("\n[PC %d] → [SW %d]", pc_mit, sw_mit);
+        if (sw_mit != sw_dest) {
+            printf(" → [SW %d]", sw_dest);
+        }
+        printf(" → [PC %d]\n", pc_dest);
+
+        // Simula ricezione
+        printf("PC %d ha ricevuto il messaggio: %s\n\n", pc_dest, buffer);
+    }
+
+    return 0;
+}
